@@ -34,7 +34,9 @@ const Home: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full">
+            <Button className="w-full" onClick={() => {
+              navigate("/downloads/new");
+            }}>
               Start Download
             </Button>
           </CardContent>

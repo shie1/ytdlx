@@ -27,10 +27,12 @@ const Settings: React.FC = () => {
     const handleSave = useCallback(() => {
         if (newDownloadsDirectory !== downloadsDirectory) {
             invoke("set_downloads_directory", { downloadsDirectory: newDownloadsDirectory }).then(() => {
+                setDownloadsDirectory(newDownloadsDirectory);
             });
         }
         if (newDownloadsMaxConcurrent !== downloadsMaxConcurrent) {
             invoke("set_config_downloads_max_concurrent", { maxConcurrent: newDownloadsMaxConcurrent }).then(() => {
+                setDownloadsMaxConcurrent(newDownloadsMaxConcurrent);
             });
         }
         toast("Changes saved!");

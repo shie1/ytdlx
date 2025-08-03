@@ -1,23 +1,100 @@
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import VideoInfo from "@/components/VideoInfo";
 import { VideoMetadata } from "@/types";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { useMemo, useState, forwardRef, useImperativeHandle, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import VideoThumbnail from "@/components/VideoThumbnail";
-import VideoInfo from "@/components/VideoInfo";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+
+export interface DownloadOptionsRef {
+    getSelectedResolution: () => string;
+    getDownloadOptions: () => {
+        resolution: string;
+        videoMetadata: VideoMetadata;
+    };
+}
+
+const DownloadOptions = forwardRef<DownloadOptionsRef, { videoMetadata: VideoMetadata }>(({ videoMetadata }, ref) => {
+    const availableResolutions = useMemo(() => {
+        return videoMetadata.formats.filter((format) => format.height)
+            .map((format) => format.format_note && format.format_note.includes("p") ? format.format_note : null)
+            .filter((resolution) => resolution !== null)
+            .filter((resolution, index, self) => self.indexOf(resolution) === index)
+            .sort((a, b) => {
+                const aHeight = parseInt(a.split("p")[0]);
+                const bHeight = parseInt(b.split("p")[0]);
+                return bHeight - aHeight;
+            });
+    }, [videoMetadata]);
+    const [selectedResolution, setSelectedResolution] = useState<string>(availableResolutions[0]);
+    const [includeVideo, setIncludeVideo] = useState(true);
+
+    const [includeAudio, setIncludeAudio] = useState(true);
+
+    useImperativeHandle(ref, () => ({
+        getSelectedResolution: () => selectedResolution,
+        getDownloadOptions: () => ({
+            resolution: selectedResolution,
+            videoMetadata
+        })
+    }), [selectedResolution, videoMetadata]);
+
+    return (<>
+        <div className="flex flex-col gap-2 bg-card p-4 rounded-md w-full">
+            <div className="flex flex-row gap-2 items-center">
+                <Switch checked={includeVideo} onCheckedChange={setIncludeVideo} />
+                <h3 className="text-lg font-bold">Video</h3>
+            </div>
+            <div className={cn(
+                "flex flex-col gap-0 transition-all duration-300 ease-in-out overflow-hidden",
+                includeVideo
+                    ? "max-h-32 opacity-100 translate-y-0"
+                    : "max-h-0 opacity-0 -translate-y-2"
+            )}>
+                <p className="text-sm text-muted-foreground transition-opacity duration-200">Resolution</p>
+                <Select value={selectedResolution} onValueChange={setSelectedResolution}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a resolution" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableResolutions.map((resolution) => (
+                            <SelectItem key={resolution} value={resolution}>{resolution}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+        </div>
+        <div className="flex flex-col gap-2 bg-card p-4 rounded-md w-full">
+            <div className="flex flex-row gap-2 items-center">
+                <Switch checked={includeAudio} onCheckedChange={setIncludeAudio} />
+                <h3 className="text-lg font-bold">Audio</h3>
+            </div>
+        </div>
+    </>
+    );
+});
 
 const NewDownload: React.FC = () => {
     const [videoUrl, setVideoUrl] = useState("");
     const [videoMetadata, setVideoMetadata] = useState<VideoMetadata | null>(null);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const downloadOptionsRef = useRef<DownloadOptionsRef>(null);
+
+    const handleDownload = () => {
+        if (downloadOptionsRef.current) {
+            const options = downloadOptionsRef.current.getDownloadOptions();
+            console.log("Download options:", options);
+        }
+    };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full flex flex-col">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold">New Download</h1>
@@ -48,6 +125,7 @@ const NewDownload: React.FC = () => {
                             console.error(error);
                         } finally {
                             setLoading(false);
+                            setVideoUrl("");
                         }
                     }}>
                         {loading ? <Loader2 className="animate-spin" /> : "Parse video"}
@@ -56,33 +134,20 @@ const NewDownload: React.FC = () => {
             </>
             )}
             {videoMetadata && (
-                <div className="space-y-4 overflow-y-auto">
-                    <Card className="overflow-hidden py-0">
-                        {/* Thumbnail on top */}
-                        <VideoThumbnail 
-                            thumbnails={videoMetadata.thumbnails}
-                            title={videoMetadata.title}
-                        />
-                        
-                        {/* Video Info */}
-                        <VideoInfo 
-                            title={videoMetadata.title}
-                            channel={videoMetadata.channel}
-                            channel_is_verified={videoMetadata.channel_is_verified}
-                            channel_follower_count={videoMetadata.channel_follower_count}
-                            view_count={videoMetadata.view_count}
-                            duration={videoMetadata.duration}
-                            like_count={videoMetadata.like_count}
-                            comment_count={videoMetadata.comment_count}
-                            upload_date={videoMetadata.upload_date}
-                            resolution={videoMetadata.resolution}
-                            fps={videoMetadata.fps}
-                            vcodec={videoMetadata.vcodec}
-                            acodec={videoMetadata.acodec}
-                            is_live={videoMetadata.is_live}
-                        />
-                    </Card>
-                </div>
+                <>
+                    <VideoInfo videoMetadata={videoMetadata} />
+                    <DownloadOptions ref={downloadOptionsRef} videoMetadata={videoMetadata} />
+                    <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={() => setVideoMetadata(null)}>
+                            <ArrowLeft className="w-4 h-4" />
+                            Different video
+                        </Button>
+                        <Button onClick={handleDownload}>
+                            <Download className="w-4 h-4" />
+                            Download
+                        </Button>
+                    </div>
+                </>
             )}
         </div>
     );
